@@ -5,11 +5,15 @@ lifecycle**, so dashboard tiles only need a native `navigate` action — no
 browser_mod, no browser registration.
 
 - View becomes active (arrival, or launch args in the URL change) → calls `launch`.
-- Navigating away from the view → calls `teardown`.
+- Navigating away from the view → calls `teardown` (gated by `teardown_to` when set).
 
 Dedupe is module-level and survives HA destroying/recreating the card during a
 page load, so cold-load remount churn collapses to one launch. Teardown is
-navigation-guarded (fires only when the URL is no longer this view).
+navigation-guarded (fires only when the URL is no longer this view). Set
+`teardown_to` to additionally require the destination path to match — e.g.
+`teardown_to: home` makes teardown fire only when navigating to the Home
+view, so a tap on a Home tile triggers it but sidebar jumps and incidental
+remounts do not.
 
 ## Options
 
@@ -17,6 +21,7 @@ navigation-guarded (fires only when the URL is no longer this view).
 | --- | --- | --- |
 | `launch` | – | Service called on activate, e.g. `script.launch_apple_tv_app`. Omit for log-only mode. |
 | `teardown` | – | Service called on leave, e.g. `script.pause_and_close_apple_tv`. |
+| `teardown_to` | – | If set, teardown fires only when the destination url matches this path (e.g. `home`). Unset = any navigation away. |
 | `teardown_data` | `{}` | Static data for the teardown call. |
 | `defaults` | `{}` | Static data merged *under* harvested URL args for launch. |
 | `param_prefix` | `arg_` | Which query keys become launch args (prefix stripped; `""` = all). |

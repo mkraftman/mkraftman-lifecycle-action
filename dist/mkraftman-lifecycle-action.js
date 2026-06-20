@@ -7,7 +7,8 @@
  *  - On the view becoming active (arrival, or launch-args in the URL changing)
  *      -> optionally raise an overlay input_boolean, then call `launch` with
  *         { ...defaults, ...harvested URL args }.
- *  - On navigating AWAY from the view
+ *  - On navigating AWAY from the view (gated by `teardown_to` when set, so it
+ *    fires only when the destination url matches that path, e.g. the Home view)
  *      -> call `teardown` with `teardown_data` (static object, default {}).
  *
  * Dedupe is MODULE-LEVEL (window.__mlaLifecycleState), keyed by view, so it
@@ -23,6 +24,8 @@
  * Config:
  *   launch:        service to call on activate, e.g. script.launch_apple_tv_app
  *   teardown:      service to call on leave,    e.g. script.pause_and_close_apple_tv
+ *   teardown_to:   path the destination url must match for teardown to fire
+ *                  (e.g. "home"); unset = any navigation away (legacy)
  *   teardown_data: static data object for the teardown call (default {})
  *   defaults:      static data merged UNDER harvested URL args for launch
  *   param_prefix:  which query keys become launch args (default "arg_")
@@ -32,7 +35,7 @@
  * ---------------------------------------------------------------------------
  */
 
-const MLA_VERSION = "0.3.0";
+const MLA_VERSION = "0.4.0";
 
 console.info(
   "%c mkraftman-lifecycle-action %c v" + MLA_VERSION + " ",
@@ -74,7 +77,7 @@ class MkraftmanLifecycleAction extends HTMLElement {
       window.removeEventListener("popstate", this._onLoc);
     }
     // Only tear down on a REAL navigation away: URL no longer this view.
-    if (this._config && !this._onThisView()) {
+    if (this._config && !this._onThisView() && this._atTeardownTarget()) {
       const st = this._state();
       if (st.launched !== null) {
         this._log("disconnected off-view -> teardown");
@@ -104,6 +107,17 @@ class MkraftmanLifecycleAction extends HTMLElement {
     return path === "/" + vp || path.endsWith("/" + vp);
   }
 
+  // When `teardown_to` is set, teardown only fires if the CURRENT url matches
+  // that path (e.g. the Home view). Unset -> preserve legacy "any nav away"
+  // behaviour. This is what makes teardown fire on the Home button only and
+  // ignore sidebar jumps / incidental remounts.
+  _atTeardownTarget() {
+    const tt = this._config.teardown_to;
+    if (!tt) return true;
+    const path = window.location.pathname.replace(/\/+$/, "");
+    return path === "/" + tt || path.endsWith("/" + tt);
+  }
+
   _harvestArgs() {
     const out = { ...(this._config.defaults || {}) };
     const prefix = this._config.param_prefix || "";
@@ -128,7 +142,7 @@ class MkraftmanLifecycleAction extends HTMLElement {
     const st = this._state();
 
     if (!this._onThisView()) {
-      if (st.launched !== null) {
+      if (st.launched !== null && this._atTeardownTarget()) {
         this._log("leaving view (" + reason + ") -> teardown");
         this._fireTeardown(reason);
         st.launched = null;
