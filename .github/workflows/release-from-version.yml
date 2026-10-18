@@ -1,0 +1,61 @@
+name: Release from VERSION
+
+# Bump the version in VERSION and push to main: this creates the matching
+# vX.Y.Z tag and GitHub release. The existing tag-push workflow is unchanged.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'VERSION'
+
+permissions:
+  contents: write
+
+env:
+  ASSET: 'dist/mkraftman-lifecycle-action.js'
+  MANIFEST: ''
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine tag
+        id: tag
+        run: |
+          ver="$(tr -d ' \t\r\n' < VERSION)"
+          if [[ ! "$ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::VERSION must be X.Y.Z, got '$ver'"
+            exit 1
+          fi
+          if [[ -n "$MANIFEST" ]]; then
+            mver="$(jq -r .version "$MANIFEST")"
+            if [[ "$mver" != "$ver" ]]; then
+              echo "::error::VERSION ($ver) does not match $MANIFEST version ($mver)"
+              exit 1
+            fi
+          fi
+          tag="v$ver"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "::notice::$tag already exists; nothing to release"
+            echo "create=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "create=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub Release
+        if: steps.tag.outputs.create == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ steps.tag.outputs.tag }}
+          files: ${{ env.ASSET }}
+          generate_release_notes: true

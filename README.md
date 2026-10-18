@@ -43,3 +43,7 @@ tap_action:
   launch: script.launch_apple_tv_app
   teardown: script.pause_and_close_apple_tv
 ```
+
+## Releasing
+
+Bump the version in `VERSION` (e.g. `1.0.1`) and push to `main`. The release workflow creates the matching `vX.Y.Z` tag and GitHub release with `dist/mkraftman-lifecycle-action.js` attached. Pushing a `vX.Y.Z` tag directly also still works.
